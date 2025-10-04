@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام حجز الغرف</title>
+    <style>
+        body { 
+            font-family: 'Tajawal', sans-serif; 
+            text-align: center; 
+            direction: rtl; 
+            background-color: #f4f4f4; 
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .header {
+            background: linear-gradient(135deg, #007BFF, #0056b3);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+        }
+        .live-clock {
+            font-size: 1.2em;
+            margin-top: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 15px;
+            border-radius: 25px;
+            display: inline-block;
+        }
+        table { 
+            width: 70%; 
+            margin: auto; 
+            border-collapse: collapse; 
+            margin-top: 20px; 
+            background-color: #fff; 
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1); 
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        th, td { 
+            border: 1px solid #ddd; 
+            padding: 12px; 
+            text-align: center; 
+        }
+        th {
+            background-color: #007BFF; 
+            color: white;
+        }
+        button { 
+            padding: 10px 15px; 
+            cursor: pointer; 
+            border: none; 
+            border-radius: 5px; 
+            font-size: 14px; 
+            transition: 0.3s;
+        }
+        button:hover {
+            opacity: 0.8;
+            transform: translateY(-2px);
+        }
+        .delete-btn { 
+            background-color: #dc3545; 
+            color: white; 
+        }
+        .confirm-btn {
+            background-color: #28a745; 
+            color: white; 
+        }
+        .print-btn, .save-btn { 
+            margin: 10px; 
+            padding: 12px 20px; 
+            color: white; 
+            font-size: 16px; 
+        }
+        .print-btn { 
+            background-color: #17a2b8; 
+        }
+        .save-btn { 
+            background-color: #ffc107; 
+        }
+        input, select { 
+            padding: 8px; 
+            font-size: 14px; 
+            border-radius: 5px; 
+            border: 1px solid #ccc; 
+            margin: 5px;
+            width: 90%;
+        }
+        .expired-badge {
+            background-color: #ffc107;
+            color: #856404;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            margin-right: 5px;
+        }
+        footer {
+            margin-top: 40px; 
+            text-align: center; 
+            font-size: 14px; 
+            color: #555;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .school-logo {
+            width: 200px; 
+            margin-bottom: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .logo-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .logo-item {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+    <div class="header">
+        <h1>🏫 نظام حجز الغرف الذكي</h1>
+        <div class="live-clock" id="liveClock">
+            <!-- الساعة والتاريخ الحي سيظهر هنا -->
+        </div>
+    </div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>الحصة</th>
+                <th>اسم المعلم</th>
+                <th>الغرفة</th>
+                <th>الإجراء</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>
+                    <select id="session">
+                        <option value="">اختر الحصة</option>
+                        <option value="الحصة الأولى">الحصة الأولى</option>
+                        <option value="الحصة الثانية">الحصة الثانية</option>
+                        <option value="الحصة الثالثة">الحصة الثالثة</option>
+                        <option value="الحصة الرابعة">الحصة الرابعة</option>
+                        <option value="الحصة الخامسة">الحصة الخامسة</option>
+                        <option value="الحصة السادسة">الحصة السادسة</option>
+                        <option value="الحصة السابعة">الحصة السابعة</option>
+                        <option value="الحصة الثامنة">الحصة الثامنة</option>
+                    </select>
+                </td>
+                <td><input type="text" id="teacherName" placeholder="ادخل اسم المعلم"></td>
+                <td>
+                    <select id="room">
+                        <option value="">اختر الغرفة</option>
+                        <option value="الصف التفاعلي">الصف التفاعلي</option>
+                        <option value="غرفة مصادر المعلومات">غرفة مصادر المعلومات</option>
+                    </select>
+                </td>
+                <td><button class="confirm-btn" onclick="bookRoom()">تأكيد الحجز</button></td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <h2>📋 جدول الحجوزات</h2>
+    <table id="reservationTable">
+        <thead>
+            <tr>
+                <th>الحصة</th>
+                <th>اسم المعلم</th>
+                <th>الغرفة</th>
+                <th>وقت الحجز</th>
+                <th>إجراء</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+    
+    <div>
+        <button class="print-btn" onclick="printTable()">🖨️ طباعة الجدول</button>
+        <button class="save-btn" onclick="saveAsPDF()">📄 حفظ كملف PDF</button>
+        <button class="delete-btn" onclick="clearAllBookings()">🗑️ مسح جميع الحجوزات</button>
+    </div>
+    
+    <p id="thankYouMessage" style="display: none; color: green; font-weight: bold; margin-top: 20px;">
+        ✅ شكراً لك على استخدامك لنظام الحجز الذكي
+    </p>
+
+    <!-- شعار المدرسة والفوتر -->
+    <footer>
+        <div class="logo-container">
+            <div class="logo-item">
+                <img src="IMG_5832.JPG" alt="مدرسة الإبداع للبنين" class="school-logo">
+            </div>
+        </div>
+        
+        <div style="background: linear-gradient(135deg, #667eea, #764ba2); padding: 15px; border-radius: 10px; color: white; margin-bottom: 15px;">
+            <h3 style="margin: 0;">مدرسة الإبداع</h3>
+            <p style="margin: 5px 0;">نظام حجز الغرف الذكي</p>
+        </div>
+        
+        <p style="font-size: 16px; margin: 10px 0;">
+            🎓 تصميم وإعداد: <strong style="color: #007BFF;">الأستاذ هلال السناني</strong>
+        </p>
+        <p style="color: #888; font-size: 12px; margin-top: 10px;">
+            ⏰ جميع الحجوزات تحفظ تلقائياً لمدة 24 ساعة
+        </p>
+    </footer>
+
+    <script>
+        // إعدادات JSONBin.io - يجب تعبئتها
+        const JSONBIN_API_KEY = 'YOUR_API_KEY_HERE'; // ضع API Key هنا
+        const JSONBIN_BIN_ID = 'YOUR_BIN_ID_HERE';   // ضع Bin ID هنا
+        const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`;
+
+        // الساعة والتاريخ الحي
+        function updateLiveClock() {
+            const now = new Date();
+            const options = { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true 
+            };
+            const arabicDate = now.toLocaleDateString('ar-SA', options);
+            document.getElementById('liveClock').innerHTML = `📅 ${arabicDate}`;
+        }
+
+        // تحديث الساعة كل ثانية
+        setInterval(updateLiveClock, 1000);
+        updateLiveClock(); // التشغيل الأولي
+
+        // دالة لحفظ الحجز في قاعدة البيانات
+        async function saveBooking(bookingData) {
+            try {
+                // إذا لم تكن بيانات JSONBin متوفرة، استخدم localStorage
+                if (!JSONBIN_API_KEY || JSONBIN_API_KEY === 'YOUR_API_KEY_HERE') {
+                    return saveToLocalStorage(bookingData);
+                }
+
+                const currentData = await fetch(JSONBIN_URL, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                }).then(res => res.json());
+                
+                bookingData.timestamp = new Date().toISOString();
+                bookingData.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+                
+                const bookings = currentData.record?.bookings || [];
+                bookings.push(bookingData);
+                
+                await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': JSONBIN_API_KEY
+                    },
+                    body: JSON.stringify({ bookings })
+                });
+                
+                return { success: true };
+            } catch (error) {
+                console.error('Error saving booking:', error);
+                return saveToLocalStorage(bookingData);
+            }
+        }
+
+        // دالة للاستخدام المحلي (بدون JSONBin)
+        function saveToLocalStorage(bookingData) {
+            try {
+                bookingData.timestamp = new Date().toISOString();
+                bookingData.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+                
+                const bookings = JSON.parse(localStorage.getItem('roomBookings') || '[]');
+                bookings.push(bookingData);
+                localStorage.setItem('roomBookings', JSON.stringify(bookings));
+                
+                return { success: true };
+            } catch (error) {
+                console.error('Error saving to localStorage:', error);
+                return { success: false };
+            }
+        }
+
+        // دالة لجلب الحجوزات
+        async function getBookings() {
+            try {
+                // جرب JSONBin أولاً
+                if (JSONBIN_API_KEY && JSONBIN_API_KEY !== 'YOUR_API_KEY_HERE') {
+                    const response = await fetch(JSONBIN_URL, {
+                        headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                    });
+                    const data = await response.json();
+                    const bookings = data.record?.bookings || [];
+                    return filterExpiredBookings(bookings);
+                } else {
+                    // استخدم localStorage
+                    const bookings = JSON.parse(localStorage.getItem('roomBookings') || '[]');
+                    return filterExpiredBookings(bookings);
+                }
+            } catch (error) {
+                console.error('Error getting bookings:', error);
+                const bookings = JSON.parse(localStorage.getItem('roomBookings') || '[]');
+                return filterExpiredBookings(bookings);
+            }
+        }
+
+        // تصفية الحجوزات المنتهية
+        function filterExpiredBookings(bookings) {
+            const now = new Date();
+            const validBookings = bookings.filter(booking => {
+                return new Date(booking.expiresAt) > now;
+            });
+            
+            // حفظ البيانات المفلترة
+            if (validBookings.length !== bookings.length) {
+                if (JSONBIN_API_KEY && JSONBIN_API_KEY !== 'YOUR_API_KEY_HERE') {
+                    saveFilteredBookings(validBookings);
+                } else {
+                    localStorage.setItem('roomBookings', JSON.stringify(validBookings));
+                }
+            }
+            
+            return validBookings;
+        }
+
+        // حفظ البيانات المفلترة في JSONBin
+        async function saveFilteredBookings(bookings) {
+            try {
+                await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': JSONBIN_API_KEY
+                    },
+                    body: JSON.stringify({ bookings })
+                });
+            } catch (error) {
+                console.error('Error saving filtered bookings:', error);
+            }
+        }
+
+        // دالة الحجز الرئيسية
+        async function bookRoom() {
+            let session = document.getElementById("session").value;
+            let teacherName = document.getElementById("teacherName").value.trim();
+            let room = document.getElementById("room").value;
+            let thankYouMessage = document.getElementById("thankYouMessage");
+            
+            if (session === "" || teacherName === "" || room === "") {
+                alert("يرجى اختيار الحصة وكتابة اسم المعلم واختيار الغرفة قبل الحجز.");
+                return;
+            }
+            
+            // التحقق من التكرار
+            const bookings = await getBookings();
+            const existingBooking = bookings.find(b => 
+                b.session === session && b.room === room
+            );
+            
+            if (existingBooking) {
+                alert(`هذه الحصة محجوزة بالفعل لهذه الغرفة من قبل ${existingBooking.teacherName}`);
+                return;
+            }
+            
+            const bookingData = {
+                session: session,
+                teacherName: teacherName,
+                room: room
+            };
+            
+            const result = await saveBooking(bookingData);
+            
+            if (result.success) {
+                thankYouMessage.style.display = "block";
+                setTimeout(() => {
+                    thankYouMessage.style.display = "none";
+                }, 3000);
+                
+                // مسح الحقول
+                document.getElementById("session").value = "";
+                document.getElementById("teacherName").value = "";
+                document.getElementById("room").value = "";
+                
+                // تحديث الجدول
+                updateReservationTable();
+            } else {
+                alert("حدث خطأ في حفظ الحجز. يرجى المحاولة مرة أخرى.");
+            }
+        }
+
+        // تحديث جدول الحجوزات
+        async function updateReservationTable() {
+            const bookings = await getBookings();
+            const tableBody = document.querySelector("#reservationTable tbody");
+            tableBody.innerHTML = "";
+            
+            bookings.forEach(booking => {
+                const row = tableBody.insertRow();
+                row.insertCell(0).innerText = booking.session;
+                row.insertCell(1).innerText = booking.teacherName;
+                row.insertCell(2).innerText = booking.room;
+                
+                const timeCell = row.insertCell(3);
+                const bookingTime = new Date(booking.timestamp);
+                timeCell.innerText = bookingTime.toLocaleTimeString('ar-SA', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                const actionCell = row.insertCell(4);
+                const deleteBtn = document.createElement("button");
+                deleteBtn.innerText = "إلغاء";
+                deleteBtn.className = "delete-btn";
+                deleteBtn.onclick = function() {
+                    deleteBooking(booking.timestamp);
+                };
+                actionCell.appendChild(deleteBtn);
+            });
+        }
+
+        // دالة حذف الحجز
+        async function deleteBooking(timestamp) {
+            const bookings = await getBookings();
+            const filtered = bookings.filter(b => b.timestamp !== timestamp);
+            
+            if (JSONBIN_API_KEY && JSONBIN_API_KEY !== 'YOUR_API_KEY_HERE') {
+                await saveFilteredBookings(filtered);
+            } else {
+                localStorage.setItem('roomBookings', JSON.stringify(filtered));
+            }
+            
+            updateReservationTable();
+        }
+
+        // مسح جميع الحجوزات
+        async function clearAllBookings() {
+            if (confirm("هل أنت متأكد من رغبتك في مسح جميع الحجوزات؟")) {
+                if (JSONBIN_API_KEY && JSONBIN_API_KEY !== 'YOUR_API_KEY_HERE') {
+                    await saveFilteredBookings([]);
+                } else {
+                    localStorage.setItem('roomBookings', '[]');
+                }
+                updateReservationTable();
+                alert("تم مسح جميع الحجوزات بنجاح");
+            }
+        }
+
+        // الطباعة
+        function printTable() {
+            window.print();
+        }
+
+        // حفظ كـ PDF
+        async function saveAsPDF() {
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // عنوان التقرير
+                doc.setFontSize(20);
+                doc.text('تقرير حجوزات الغرف - مدرسة الإبداع', 105, 15, null, null, 'center');
+                
+                // التاريخ
+                doc.setFontSize(12);
+                doc.text('تاريخ التقرير: ' + new Date().toLocaleDateString('ar-SA'), 105, 25, null, null, 'center');
+                
+                // جدول الحجوزات
+                const bookings = await getBookings();
+                let yPosition = 40;
+                
+                doc.setFontSize(12);
+                doc.text('الحصة', 20, yPosition);
+                doc.text('اسم المعلم', 60, yPosition);
+                doc.text('الغرفة', 100, yPosition);
+                doc.text('وقت الحجز', 140, yPosition);
+                
+                yPosition += 10;
+                doc.line(20, yPosition, 180, yPosition);
+                yPosition += 10;
+                
+                bookings.forEach(booking => {
+                    if (yPosition > 270) {
+                        doc.addPage();
+                        yPosition = 20;
+                    }
+                    
+                    doc.text(booking.session, 20, yPosition);
+                    doc.text(booking.teacherName, 60, yPosition);
+                    doc.text(booking.room, 100, yPosition);
+                    doc.text(new Date(booking.timestamp).toLocaleTimeString('ar-SA'), 140, yPosition);
+                    yPosition += 10;
+                });
+                
+                doc.save('حجوزات_الغرف_' + new Date().toISOString().split('T')[0] + '.pdf');
+            } catch (error) {
+                alert("ميزة PDF تحتاج اتصال بالإنترنت. جاري استخدام الطباعة العادية...");
+                printTable();
+            }
+        }
+
+        // تحديث الجدول كل 30 ثانية لحذف الحجوزات المنتهية
+        setInterval(updateReservationTable, 30000);
+
+        // تحميل البيانات عند فتح الصفحة
+        document.addEventListener('DOMContentLoaded', function() {
+            updateReservationTable();
+        });
+    </script>
+</body>
+</html>
