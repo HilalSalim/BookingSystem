@@ -128,6 +128,14 @@
             border-radius: 10px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
+        .reset-info {
+            background: #e7f3ff;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px auto;
+            width: 80%;
+            border-right: 4px solid #007BFF;
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -139,6 +147,10 @@
         <div class="live-clock" id="liveClock">
             <!-- الساعة والتاريخ الحي سيظهر هنا -->
         </div>
+    </div>
+
+    <div class="reset-info">
+        <strong>⏰ مدة الحجز:</strong> جميع الحجوزات تحفظ لمدة 24 ساعة ثم يتم حذفها تلقائياً
     </div>
     
     <table>
@@ -225,9 +237,9 @@
     </footer>
 
     <script>
-        // إعدادات JSONBin.io - يجب تعبئتها
-        const JSONBIN_API_KEY = 'YOUR_API_KEY_HERE'; // ضع API Key هنا
-        const JSONBIN_BIN_ID = 'YOUR_BIN_ID_HERE';   // ضع Bin ID هنا
+        // إعدادات JSONBin.io - قاعدة البيانات الموحدة
+        const JSONBIN_API_KEY = '$2a$10$qBOTDzgjhSuSq4mb3tD9N.b9UZyDoY2XBvm409BK41fp7llrprgcK';
+        const JSONBIN_BIN_ID = '68e13900d0ea881f40952b07';
         const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`;
 
         // الساعة والتاريخ الحي
@@ -251,25 +263,49 @@
         setInterval(updateLiveClock, 1000);
         updateLiveClock(); // التشغيل الأولي
 
-        // دالة لحفظ الحجز في قاعدة البيانات
+        // دالة لحساب وقت انتهاء 24 ساعة (6 صباحاً اليوم التالي)
+        function getExpirationTime() {
+            const now = new Date();
+            const tomorrow6AM = new Date();
+            
+            // نضيف يوم واحد
+            tomorrow6AM.setDate(now.getDate() + 1);
+            // نضبط الوقت لـ 6 صباحاً
+            tomorrow6AM.setHours(6, 0, 0, 0);
+            
+            return tomorrow6AM.toISOString();
+        }
+
+        // دالة لحفظ الحجز في قاعدة البيانات الموحدة
         async function saveBooking(bookingData) {
             try {
-                // إذا لم تكن بيانات JSONBin متوفرة، استخدم localStorage
-                if (!JSONBIN_API_KEY || JSONBIN_API_KEY === 'YOUR_API_KEY_HERE') {
-                    return saveToLocalStorage(bookingData);
-                }
-
+                // أولاً نجلب البيانات الحالية
                 const currentData = await fetch(JSONBIN_URL, {
-                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                    headers: {
+                        'X-Master-Key': JSONBIN_API_KEY
+                    }
                 }).then(res => res.json());
                 
+                // نضيف timestamp ووقت الانتهاء (6 صباحاً الغد)
                 bookingData.timestamp = new Date().toISOString();
-                bookingData.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+                bookingData.expiresAt = getExpirationTime();
                 
                 const bookings = currentData.record?.bookings || [];
+                
+                // التحقق من عدم وجود حجز مكرر لنفس الحصة والغرفة
+                const existingBooking = bookings.find(b => 
+                    b.session === bookingData.session && 
+                    b.room === bookingData.room
+                );
+                
+                if (existingBooking) {
+                    return { success: false, message: `هذه الحصة محجوزة بالفعل لهذه الغرفة من قبل ${existingBooking.teacherName}` };
+                }
+                
                 bookings.push(bookingData);
                 
-                await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+                // نحفظ البيانات الجديدة
+                const response = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -278,73 +314,44 @@
                     body: JSON.stringify({ bookings })
                 });
                 
-                return { success: true };
+                return { success: true, message: "تم الحجز بنجاح" };
             } catch (error) {
                 console.error('Error saving booking:', error);
-                return saveToLocalStorage(bookingData);
+                return { success: false, message: "حدث خطأ في حفظ الحجز" };
             }
         }
 
-        // دالة للاستخدام المحلي (بدون JSONBin)
-        function saveToLocalStorage(bookingData) {
-            try {
-                bookingData.timestamp = new Date().toISOString();
-                bookingData.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-                
-                const bookings = JSON.parse(localStorage.getItem('roomBookings') || '[]');
-                bookings.push(bookingData);
-                localStorage.setItem('roomBookings', JSON.stringify(bookings));
-                
-                return { success: true };
-            } catch (error) {
-                console.error('Error saving to localStorage:', error);
-                return { success: false };
-            }
-        }
-
-        // دالة لجلب الحجوزات
+        // دالة لجلب الحجوزات مع حذف المنتهية
         async function getBookings() {
             try {
-                // جرب JSONBin أولاً
-                if (JSONBIN_API_KEY && JSONBIN_API_KEY !== 'YOUR_API_KEY_HERE') {
-                    const response = await fetch(JSONBIN_URL, {
-                        headers: { 'X-Master-Key': JSONBIN_API_KEY }
-                    });
-                    const data = await response.json();
-                    const bookings = data.record?.bookings || [];
-                    return filterExpiredBookings(bookings);
-                } else {
-                    // استخدم localStorage
-                    const bookings = JSON.parse(localStorage.getItem('roomBookings') || '[]');
-                    return filterExpiredBookings(bookings);
+                const response = await fetch(JSONBIN_URL, {
+                    headers: {
+                        'X-Master-Key': JSONBIN_API_KEY
+                    }
+                });
+                
+                const data = await response.json();
+                const bookings = data.record?.bookings || [];
+                
+                // نفلتر الحجوزات المنتهية (التي انتهى وقتها)
+                const now = new Date();
+                const validBookings = bookings.filter(booking => {
+                    return new Date(booking.expiresAt) > now;
+                });
+                
+                // نحفظ البيانات بعد الفلترة (نحذف المنتهية)
+                if (validBookings.length !== bookings.length) {
+                    await saveFilteredBookings(validBookings);
                 }
+                
+                return validBookings;
             } catch (error) {
                 console.error('Error getting bookings:', error);
-                const bookings = JSON.parse(localStorage.getItem('roomBookings') || '[]');
-                return filterExpiredBookings(bookings);
+                return [];
             }
         }
 
-        // تصفية الحجوزات المنتهية
-        function filterExpiredBookings(bookings) {
-            const now = new Date();
-            const validBookings = bookings.filter(booking => {
-                return new Date(booking.expiresAt) > now;
-            });
-            
-            // حفظ البيانات المفلترة
-            if (validBookings.length !== bookings.length) {
-                if (JSONBIN_API_KEY && JSONBIN_API_KEY !== 'YOUR_API_KEY_HERE') {
-                    saveFilteredBookings(validBookings);
-                } else {
-                    localStorage.setItem('roomBookings', JSON.stringify(validBookings));
-                }
-            }
-            
-            return validBookings;
-        }
-
-        // حفظ البيانات المفلترة في JSONBin
+        // دالة مساعدة لحفظ البيانات المفلترة
         async function saveFilteredBookings(bookings) {
             try {
                 await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
@@ -372,17 +379,6 @@
                 return;
             }
             
-            // التحقق من التكرار
-            const bookings = await getBookings();
-            const existingBooking = bookings.find(b => 
-                b.session === session && b.room === room
-            );
-            
-            if (existingBooking) {
-                alert(`هذه الحصة محجوزة بالفعل لهذه الغرفة من قبل ${existingBooking.teacherName}`);
-                return;
-            }
-            
             const bookingData = {
                 session: session,
                 teacherName: teacherName,
@@ -393,6 +389,8 @@
             
             if (result.success) {
                 thankYouMessage.style.display = "block";
+                thankYouMessage.innerHTML = `✅ ${result.message}`;
+                
                 setTimeout(() => {
                     thankYouMessage.style.display = "none";
                 }, 3000);
@@ -405,7 +403,7 @@
                 // تحديث الجدول
                 updateReservationTable();
             } else {
-                alert("حدث خطأ في حفظ الحجز. يرجى المحاولة مرة أخرى.");
+                alert(result.message);
             }
         }
 
@@ -414,6 +412,16 @@
             const bookings = await getBookings();
             const tableBody = document.querySelector("#reservationTable tbody");
             tableBody.innerHTML = "";
+            
+            if (bookings.length === 0) {
+                const row = tableBody.insertRow();
+                const cell = row.insertCell(0);
+                cell.colSpan = 5;
+                cell.innerText = "لا توجد حجوزات حالياً";
+                cell.style.textAlign = "center";
+                cell.style.color = "#666";
+                return;
+            }
             
             bookings.forEach(booking => {
                 const row = tableBody.insertRow();
@@ -441,26 +449,20 @@
 
         // دالة حذف الحجز
         async function deleteBooking(timestamp) {
-            const bookings = await getBookings();
-            const filtered = bookings.filter(b => b.timestamp !== timestamp);
-            
-            if (JSONBIN_API_KEY && JSONBIN_API_KEY !== 'YOUR_API_KEY_HERE') {
+            if (confirm("هل أنت متأكد من إلغاء هذا الحجز؟")) {
+                const bookings = await getBookings();
+                const filtered = bookings.filter(b => b.timestamp !== timestamp);
+                
                 await saveFilteredBookings(filtered);
-            } else {
-                localStorage.setItem('roomBookings', JSON.stringify(filtered));
+                updateReservationTable();
+                alert("تم إلغاء الحجز بنجاح");
             }
-            
-            updateReservationTable();
         }
 
         // مسح جميع الحجوزات
         async function clearAllBookings() {
             if (confirm("هل أنت متأكد من رغبتك في مسح جميع الحجوزات؟")) {
-                if (JSONBIN_API_KEY && JSONBIN_API_KEY !== 'YOUR_API_KEY_HERE') {
-                    await saveFilteredBookings([]);
-                } else {
-                    localStorage.setItem('roomBookings', '[]');
-                }
+                await saveFilteredBookings([]);
                 updateReservationTable();
                 alert("تم مسح جميع الحجوزات بنجاح");
             }
@@ -519,12 +521,13 @@
             }
         }
 
-        // تحديث الجدول كل 30 ثانية لحذف الحجوزات المنتهية
-        setInterval(updateReservationTable, 30000);
+        // تحديث الجدول كل دقيقة لحذف الحجوزات المنتهية
+        setInterval(updateReservationTable, 60000);
 
         // تحميل البيانات عند فتح الصفحة
         document.addEventListener('DOMContentLoaded', function() {
             updateReservationTable();
+            console.log('تم تحميل نظام الحجوزات - قاعدة البيانات موحدة للجميع');
         });
     </script>
 </body>
