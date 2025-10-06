@@ -23,12 +23,24 @@
             box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
         }
         .live-clock {
-            font-size: 1.2em;
+            font-size: 1.1em;
             margin-top: 10px;
             background: rgba(255, 255, 255, 0.2);
             padding: 8px 15px;
             border-radius: 25px;
             display: inline-block;
+        }
+        .dual-date {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .date-item {
+            background: rgba(255, 255, 255, 0.3);
+            padding: 5px 10px;
+            border-radius: 15px;
+            margin: 2px;
         }
         table { 
             width: 70%; 
@@ -69,7 +81,7 @@
             background-color: #28a745; 
             color: white; 
         }
-        .print-btn, .save-btn { 
+        .print-btn, .save-btn, .archive-btn { 
             margin: 10px; 
             padding: 12px 20px; 
             color: white; 
@@ -81,6 +93,9 @@
         .save-btn { 
             background-color: #ffc107; 
         }
+        .archive-btn {
+            background-color: #6f42c1;
+        }
         input, select { 
             padding: 8px; 
             font-size: 14px; 
@@ -88,14 +103,6 @@
             border: 1px solid #ccc; 
             margin: 5px;
             width: 90%;
-        }
-        .expired-badge {
-            background-color: #ffc107;
-            color: #856404;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 0.8em;
-            margin-right: 5px;
         }
         footer {
             margin-top: 40px; 
@@ -136,6 +143,50 @@
             width: 80%;
             border-right: 4px solid #007BFF;
         }
+        .archive-section {
+            margin: 30px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: 90%;
+        }
+        .archive-controls {
+            margin: 15px 0;
+        }
+        .archive-table {
+            width: 100%;
+            margin-top: 15px;
+        }
+        .dual-date-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            align-items: center;
+        }
+        .arabic-date {
+            font-weight: bold;
+            color: #007BFF;
+        }
+        .english-date {
+            font-size: 0.85em;
+            color: #666;
+        }
+        .pdf-table {
+            font-family: 'Tajawal', sans-serif;
+            direction: rtl;
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .pdf-table th, .pdf-table td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: center;
+        }
+        .pdf-table th {
+            background-color: #007BFF;
+            color: white;
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -145,12 +196,12 @@
     <div class="header">
         <h1>🏫 نظام حجز الغرف الذكي</h1>
         <div class="live-clock" id="liveClock">
-            <!-- الساعة والتاريخ الحي سيظهر هنا -->
+            <div class="dual-date" id="dualDateClock"></div>
         </div>
     </div>
 
     <div class="reset-info">
-        <strong>⏰ مدة الحجز:</strong> جميع الحجوزات تحفظ لمدة 24 ساعة ثم يتم حذفها تلقائياً
+        <strong>⏰ مدة الحجز:</strong> جميع الحجوزات تحفظ لمدة 24 ساعة ثم يتم نقلها للأرشيف تلقائياً
     </div>
     
     <table>
@@ -190,7 +241,7 @@
         </tbody>
     </table>
     
-    <h2>📋 جدول الحجوزات</h2>
+    <h2>📋 جدول الحجوزات النشطة</h2>
     <table id="reservationTable">
         <thead>
             <tr>
@@ -209,6 +260,32 @@
         <button class="print-btn" onclick="printTable()">🖨️ طباعة الجدول</button>
         <button class="save-btn" onclick="saveAsPDF()">📄 حفظ كملف PDF</button>
         <button class="delete-btn" onclick="clearAllBookings()">🗑️ مسح جميع الحجوزات</button>
+    </div>
+
+    <!-- قسم الأرشيف -->
+    <div class="archive-section">
+        <h2>📚 الأرشيف - الحجوزات السابقة</h2>
+        
+        <div class="archive-controls">
+            <input type="date" id="archiveDate">
+            <button class="archive-btn" onclick="filterArchivedBookings()">🔍 تصفية بالتاريخ</button>
+            <button class="archive-btn" onclick="showAllArchivedBookings()">📊 عرض كل الأرشيف</button>
+            <button class="delete-btn" onclick="clearArchive()">🗑️ مسح الأرشيف</button>
+        </div>
+
+        <table class="archive-table" id="archiveTable">
+            <thead>
+                <tr>
+                    <th>التاريخ</th>
+                    <th>الحصة</th>
+                    <th>اسم المعلم</th>
+                    <th>الغرفة</th>
+                    <th>وقت الحجز</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
     </div>
     
     <p id="thankYouMessage" style="display: none; color: green; font-weight: bold; margin-top: 20px;">
@@ -232,9 +309,29 @@
             🎓 تصميم وإعداد: <strong style="color: #007BFF;">الأستاذ هلال السناني</strong>
         </p>
         <p style="color: #888; font-size: 12px; margin-top: 10px;">
-            ⏰ جميع الحجوزات تحفظ تلقائياً لمدة 24 ساعة
+            ⏰ جميع الحجوزات تحفظ تلقائياً لمدة 24 ساعة ثم تنتقل للأرشيف
         </p>
     </footer>
+
+    <!-- جدول مخفي لاستخدامه في PDF -->
+    <div id="pdfTable" style="display: none; background: white; padding: 20px; direction: rtl;">
+        <h2 style="text-align: center; color: #007BFF;">تقرير حجوزات الغرف - مدرسة الإبداع</h2>
+        <p style="text-align: center;" id="pdfDate"></p>
+        <table class="pdf-table" id="pdfContent">
+            <thead>
+                <tr>
+                    <th>الحصة</th>
+                    <th>اسم المعلم</th>
+                    <th>الغرفة</th>
+                    <th>وقت الحجز</th>
+                    <th>التاريخ</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+        <p style="text-align: center; margin-top: 20px;" id="pdfSummary"></p>
+    </div>
 
     <script>
         // إعدادات JSONBin.io - قاعدة البيانات الموحدة
@@ -242,10 +339,9 @@
         const JSONBIN_BIN_ID = '68e13900d0ea881f40952b07';
         const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`;
 
-        // الساعة والتاريخ الحي
-        function updateLiveClock() {
-            const now = new Date();
-            const options = { 
+        // دالة لعرض التاريخ المزدوج (عربي وإنجليزي)
+        function formatDualDate(date) {
+            const arabicOptions = { 
                 weekday: 'long', 
                 year: 'numeric', 
                 month: 'long', 
@@ -255,44 +351,77 @@
                 second: '2-digit',
                 hour12: true 
             };
-            const arabicDate = now.toLocaleDateString('ar-SA', options);
-            document.getElementById('liveClock').innerHTML = `📅 ${arabicDate}`;
+            
+            const englishOptions = {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            };
+            
+            const arabicDate = date.toLocaleDateString('ar-SA', arabicOptions);
+            const englishDate = date.toLocaleDateString('en-US', englishOptions);
+            
+            return `
+                <div class="dual-date">
+                    <div class="date-item arabic-date">${arabicDate}</div>
+                    <div class="date-item english-date">${englishDate}</div>
+                </div>
+            `;
+        }
+
+        // دالة لعرض التاريخ في الخلايا
+        function formatCellDate(date) {
+            const arabicDate = date.toLocaleDateString('ar-SA');
+            const englishDate = date.toLocaleDateString('en-US');
+            const time = date.toLocaleTimeString('ar-SA', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            
+            return `
+                <div class="dual-date-cell">
+                    <div class="arabic-date">${arabicDate}</div>
+                    <div class="english-date">${englishDate}</div>
+                    <div style="margin-top: 3px; font-size: 0.9em; color: #333;">${time}</div>
+                </div>
+            `;
+        }
+
+        // تحديث الساعة والتاريخ الحي
+        function updateLiveClock() {
+            const now = new Date();
+            document.getElementById('dualDateClock').innerHTML = formatDualDate(now);
         }
 
         // تحديث الساعة كل ثانية
         setInterval(updateLiveClock, 1000);
-        updateLiveClock(); // التشغيل الأولي
+        updateLiveClock();
 
-        // دالة لحساب وقت انتهاء 24 ساعة (6 صباحاً اليوم التالي)
+        // دالة لحساب وقت انتهاء 24 ساعة
         function getExpirationTime() {
             const now = new Date();
-            const tomorrow6AM = new Date();
-            
-            // نضيف يوم واحد
-            tomorrow6AM.setDate(now.getDate() + 1);
-            // نضبط الوقت لـ 6 صباحاً
-            tomorrow6AM.setHours(6, 0, 0, 0);
-            
-            return tomorrow6AM.toISOString();
+            const expiration = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            return expiration.toISOString();
         }
 
         // دالة لحفظ الحجز في قاعدة البيانات الموحدة
         async function saveBooking(bookingData) {
             try {
-                // أولاً نجلب البيانات الحالية
                 const currentData = await fetch(JSONBIN_URL, {
-                    headers: {
-                        'X-Master-Key': JSONBIN_API_KEY
-                    }
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
                 }).then(res => res.json());
                 
-                // نضيف timestamp ووقت الانتهاء (6 صباحاً الغد)
                 bookingData.timestamp = new Date().toISOString();
                 bookingData.expiresAt = getExpirationTime();
                 
                 const bookings = currentData.record?.bookings || [];
+                const archive = currentData.record?.archive || [];
                 
-                // التحقق من عدم وجود حجز مكرر لنفس الحصة والغرفة
+                // التحقق من عدم وجود حجز مكرر
                 const existingBooking = bookings.find(b => 
                     b.session === bookingData.session && 
                     b.room === bookingData.room
@@ -311,7 +440,7 @@
                         'Content-Type': 'application/json',
                         'X-Master-Key': JSONBIN_API_KEY
                     },
-                    body: JSON.stringify({ bookings })
+                    body: JSON.stringify({ bookings, archive })
                 });
                 
                 return { success: true, message: "تم الحجز بنجاح" };
@@ -321,27 +450,34 @@
             }
         }
 
-        // دالة لجلب الحجوزات مع حذف المنتهية
+        // دالة لجلب الحجوزات مع نقل المنتهية للأرشيف
         async function getBookings() {
             try {
                 const response = await fetch(JSONBIN_URL, {
-                    headers: {
-                        'X-Master-Key': JSONBIN_API_KEY
-                    }
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
                 });
                 
                 const data = await response.json();
                 const bookings = data.record?.bookings || [];
+                const archive = data.record?.archive || [];
                 
-                // نفلتر الحجوزات المنتهية (التي انتهى وقتها)
+                // نفلتر الحجوزات المنتهية وننقلها للأرشيف
                 const now = new Date();
-                const validBookings = bookings.filter(booking => {
-                    return new Date(booking.expiresAt) > now;
+                const validBookings = [];
+                const expiredBookings = [];
+                
+                bookings.forEach(booking => {
+                    if (new Date(booking.expiresAt) > now) {
+                        validBookings.push(booking);
+                    } else {
+                        expiredBookings.push(booking);
+                    }
                 });
                 
-                // نحفظ البيانات بعد الفلترة (نحذف المنتهية)
-                if (validBookings.length !== bookings.length) {
-                    await saveFilteredBookings(validBookings);
+                // إذا فيه حجوزات منتهية، ننقلها للأرشيف
+                if (expiredBookings.length > 0) {
+                    const updatedArchive = [...archive, ...expiredBookings];
+                    await saveAllData(validBookings, updatedArchive);
                 }
                 
                 return validBookings;
@@ -351,8 +487,8 @@
             }
         }
 
-        // دالة مساعدة لحفظ البيانات المفلترة
-        async function saveFilteredBookings(bookings) {
+        // دالة لحفظ كل البيانات
+        async function saveAllData(bookings, archive) {
             try {
                 await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
                     method: 'PUT',
@@ -360,10 +496,10 @@
                         'Content-Type': 'application/json',
                         'X-Master-Key': JSONBIN_API_KEY
                     },
-                    body: JSON.stringify({ bookings })
+                    body: JSON.stringify({ bookings, archive })
                 });
             } catch (error) {
-                console.error('Error saving filtered bookings:', error);
+                console.error('Error saving data:', error);
             }
         }
 
@@ -407,7 +543,7 @@
             }
         }
 
-        // تحديث جدول الحجوزات
+        // تحديث جدول الحجوزات النشطة
         async function updateReservationTable() {
             const bookings = await getBookings();
             const tableBody = document.querySelector("#reservationTable tbody");
@@ -417,7 +553,7 @@
                 const row = tableBody.insertRow();
                 const cell = row.insertCell(0);
                 cell.colSpan = 5;
-                cell.innerText = "لا توجد حجوزات حالياً";
+                cell.innerText = "لا توجد حجوزات نشطة حالياً";
                 cell.style.textAlign = "center";
                 cell.style.color = "#666";
                 return;
@@ -431,10 +567,7 @@
                 
                 const timeCell = row.insertCell(3);
                 const bookingTime = new Date(booking.timestamp);
-                timeCell.innerText = bookingTime.toLocaleTimeString('ar-SA', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                });
+                timeCell.innerHTML = formatCellDate(bookingTime);
                 
                 const actionCell = row.insertCell(4);
                 const deleteBtn = document.createElement("button");
@@ -452,19 +585,207 @@
             if (confirm("هل أنت متأكد من إلغاء هذا الحجز؟")) {
                 const bookings = await getBookings();
                 const filtered = bookings.filter(b => b.timestamp !== timestamp);
+                const response = await fetch(JSONBIN_URL, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                });
+                const data = await response.json();
+                const archive = data.record?.archive || [];
                 
-                await saveFilteredBookings(filtered);
+                await saveAllData(filtered, archive);
                 updateReservationTable();
                 alert("تم إلغاء الحجز بنجاح");
             }
         }
 
-        // مسح جميع الحجوزات
+        // مسح جميع الحجوزات النشطة
         async function clearAllBookings() {
-            if (confirm("هل أنت متأكد من رغبتك في مسح جميع الحجوزات؟")) {
-                await saveFilteredBookings([]);
+            if (confirm("هل أنت متأكد من رغبتك في مسح جميع الحجوزات النشطة؟")) {
+                const response = await fetch(JSONBIN_URL, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                });
+                const data = await response.json();
+                const archive = data.record?.archive || [];
+                
+                await saveAllData([], archive);
                 updateReservationTable();
-                alert("تم مسح جميع الحجوزات بنجاح");
+                alert("تم مسح جميع الحجوزات النشطة بنجاح");
+            }
+        }
+
+        // الأرشيف - عرض كل الحجوزات السابقة
+        async function showAllArchivedBookings() {
+            try {
+                const response = await fetch(JSONBIN_URL, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                });
+                
+                const data = await response.json();
+                const archive = data.record?.archive || [];
+                displayArchivedBookings(archive);
+            } catch (error) {
+                console.error('Error getting archive:', error);
+                alert("حدث خطأ في جلب الأرشيف");
+            }
+        }
+
+        // الأرشيف - عرض الحجوزات في الجدول
+        function displayArchivedBookings(bookings) {
+            const table = document.getElementById('archiveTable');
+            const tbody = table.querySelector('tbody');
+            tbody.innerHTML = '';
+            
+            if (bookings.length === 0) {
+                const row = tbody.insertRow();
+                const cell = row.insertCell(0);
+                cell.colSpan = 5;
+                cell.innerText = "لا توجد حجوزات في الأرشيف";
+                cell.style.textAlign = "center";
+                cell.style.color = "#666";
+            } else {
+                // ترتيب الحجوزات من الأحدث إلى الأقدم
+                bookings.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                bookings.forEach(booking => {
+                    const row = tbody.insertRow();
+                    const date = new Date(booking.timestamp);
+                    
+                    row.insertCell(0).innerHTML = formatCellDate(date);
+                    row.insertCell(1).innerText = booking.session;
+                    row.insertCell(2).innerText = booking.teacherName;
+                    row.insertCell(3).innerText = booking.room;
+                    row.insertCell(4).innerText = date.toLocaleTimeString('ar-SA');
+                });
+            }
+        }
+
+        // الأرشيف - التصفية بالتاريخ
+        async function filterArchivedBookings() {
+            const selectedDate = document.getElementById('archiveDate').value;
+            if (!selectedDate) {
+                alert("يرجى اختيار تاريخ للتصفية");
+                return;
+            }
+            
+            try {
+                const response = await fetch(JSONBIN_URL, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                });
+                
+                const data = await response.json();
+                const archive = data.record?.archive || [];
+                
+                // تصفية الحجوزات حسب التاريخ المحدد
+                const filteredBookings = archive.filter(booking => {
+                    const bookingDate = new Date(booking.timestamp).toISOString().split('T')[0];
+                    return bookingDate === selectedDate;
+                });
+                
+                displayArchivedBookings(filteredBookings);
+            } catch (error) {
+                console.error('Error filtering archive:', error);
+                alert("حدث خطأ في تصفية الأرشيف");
+            }
+        }
+
+        // الأرشيف - مسح الأرشيف
+        async function clearArchive() {
+            if (confirm("هل أنت متأكد من رغبتك في مسح كل الأرشيف؟ لا يمكن التراجع عن هذا الإجراء.")) {
+                const response = await fetch(JSONBIN_URL, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                });
+                const data = await response.json();
+                const bookings = data.record?.bookings || [];
+                
+                await saveAllData(bookings, []);
+                displayArchivedBookings([]);
+                alert("تم مسح الأرشيف بنجاح");
+            }
+        }
+
+        // حفظ كـ PDF باستخدام html2canvas
+        async function saveAsPDF() {
+            try {
+                // إعداد جدول PDF
+                const bookings = await getBookings();
+                const pdfTable = document.getElementById('pdfTable');
+                const pdfContent = document.getElementById('pdfContent');
+                const pdfDate = document.getElementById('pdfDate');
+                const pdfSummary = document.getElementById('pdfSummary');
+                
+                // تحديث التاريخ
+                const now = new Date();
+                const arabicDate = now.toLocaleDateString('ar-SA');
+                const englishDate = now.toLocaleDateString('en-US');
+                pdfDate.innerHTML = `تاريخ التقرير: ${arabicDate} - ${englishDate} - الوقت: ${now.toLocaleTimeString('ar-SA')}`;
+                
+                // تحديث المحتوى
+                const tbody = pdfContent.querySelector('tbody');
+                tbody.innerHTML = '';
+                
+                if (bookings.length === 0) {
+                    const row = tbody.insertRow();
+                    const cell = row.insertCell(0);
+                    cell.colSpan = 5;
+                    cell.innerText = "لا توجد حجوزات نشطة حالياً";
+                    cell.style.textAlign = "center";
+                } else {
+                    bookings.forEach(booking => {
+                        const row = tbody.insertRow();
+                        const bookingTime = new Date(booking.timestamp);
+                        const arabicDate = bookingTime.toLocaleDateString('ar-SA');
+                        const englishDate = bookingTime.toLocaleDateString('en-US');
+                        
+                        row.insertCell(0).innerText = booking.session;
+                        row.insertCell(1).innerText = booking.teacherName;
+                        row.insertCell(2).innerText = booking.room;
+                        row.insertCell(3).innerText = bookingTime.toLocaleTimeString('ar-SA');
+                        row.insertCell(4).innerText = `${arabicDate}\n${englishDate}`;
+                    });
+                }
+                
+                // تحديث الملخص
+                pdfSummary.innerHTML = `إجمالي عدد الحجوزات النشطة: ${bookings.length}`;
+                
+                // إظهار الجدول مؤقتاً
+                pdfTable.style.display = 'block';
+                
+                // تحويل إلى صورة باستخدام html2canvas
+                const canvas = await html2canvas(pdfTable, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false
+                });
+                
+                // إخفاء الجدول مرة أخرى
+                pdfTable.style.display = 'none';
+                
+                // إنشاء PDF
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const imgData = canvas.toDataURL('image/png');
+                const imgWidth = 190;
+                const pageHeight = 280;
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 10;
+                
+                doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+                
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight + 10;
+                    doc.addPage();
+                    doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                
+                const fileName = `حجوزات_الغرف_${now.toISOString().split('T')[0]}.pdf`;
+                doc.save(fileName);
+                
+            } catch (error) {
+                console.error('Error generating PDF:', error);
+                alert("حدث خطأ في إنشاء ملف PDF. جاري استخدام الطباعة العادية...");
+                printTable();
             }
         }
 
@@ -473,61 +794,13 @@
             window.print();
         }
 
-        // حفظ كـ PDF
-        async function saveAsPDF() {
-            try {
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF();
-                
-                // عنوان التقرير
-                doc.setFontSize(20);
-                doc.text('تقرير حجوزات الغرف - مدرسة الإبداع', 105, 15, null, null, 'center');
-                
-                // التاريخ
-                doc.setFontSize(12);
-                doc.text('تاريخ التقرير: ' + new Date().toLocaleDateString('ar-SA'), 105, 25, null, null, 'center');
-                
-                // جدول الحجوزات
-                const bookings = await getBookings();
-                let yPosition = 40;
-                
-                doc.setFontSize(12);
-                doc.text('الحصة', 20, yPosition);
-                doc.text('اسم المعلم', 60, yPosition);
-                doc.text('الغرفة', 100, yPosition);
-                doc.text('وقت الحجز', 140, yPosition);
-                
-                yPosition += 10;
-                doc.line(20, yPosition, 180, yPosition);
-                yPosition += 10;
-                
-                bookings.forEach(booking => {
-                    if (yPosition > 270) {
-                        doc.addPage();
-                        yPosition = 20;
-                    }
-                    
-                    doc.text(booking.session, 20, yPosition);
-                    doc.text(booking.teacherName, 60, yPosition);
-                    doc.text(booking.room, 100, yPosition);
-                    doc.text(new Date(booking.timestamp).toLocaleTimeString('ar-SA'), 140, yPosition);
-                    yPosition += 10;
-                });
-                
-                doc.save('حجوزات_الغرف_' + new Date().toISOString().split('T')[0] + '.pdf');
-            } catch (error) {
-                alert("ميزة PDF تحتاج اتصال بالإنترنت. جاري استخدام الطباعة العادية...");
-                printTable();
-            }
-        }
-
-        // تحديث الجدول كل دقيقة لحذف الحجوزات المنتهية
+        // تحديث الجدول كل دقيقة
         setInterval(updateReservationTable, 60000);
 
         // تحميل البيانات عند فتح الصفحة
         document.addEventListener('DOMContentLoaded', function() {
             updateReservationTable();
-            console.log('تم تحميل نظام الحجوزات - قاعدة البيانات موحدة للجميع');
+            console.log('تم تحميل نظام الحجوزات مع الأرشيف والتواريخ المزدوجة');
         });
     </script>
 </body>
