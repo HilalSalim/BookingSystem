@@ -96,6 +96,15 @@
         .archive-btn {
             background-color: #6f42c1;
         }
+        .excel-btn {
+            background-color: #28a745;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            margin: 5px;
+            font-size: 16px;
+        }
         input, select { 
             padding: 8px; 
             font-size: 14px; 
@@ -153,6 +162,10 @@
         }
         .archive-controls {
             margin: 15px 0;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
         }
         .archive-table {
             width: 100%;
@@ -270,6 +283,8 @@
             <input type="date" id="archiveDate">
             <button class="archive-btn" onclick="filterArchivedBookings()">🔍 تصفية بالتاريخ</button>
             <button class="archive-btn" onclick="showAllArchivedBookings()">📊 عرض كل الأرشيف</button>
+            <button class="save-btn" onclick="exportArchivePDF()">📄 حفظ الأرشيف PDF</button>
+            <button class="excel-btn" onclick="exportArchiveExcel()">📊 حفظ الأرشيف Excel</button>
             <button class="delete-btn" onclick="clearArchive()">🗑️ مسح الأرشيف</button>
         </div>
 
@@ -687,6 +702,147 @@
             }
         }
 
+        // الأرشيف - تصدير الأرشيف كـ PDF
+        async function exportArchivePDF() {
+            try {
+                const response = await fetch(JSONBIN_URL, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                });
+                
+                const data = await response.json();
+                const archive = data.record?.archive || [];
+                
+                if (archive.length === 0) {
+                    alert("لا توجد بيانات في الأرشيف لتصديرها");
+                    return;
+                }
+
+                // إعداد جدول PDF
+                const pdfTable = document.getElementById('pdfTable');
+                const pdfContent = document.getElementById('pdfContent');
+                const pdfDate = document.getElementById('pdfDate');
+                const pdfSummary = document.getElementById('pdfSummary');
+                
+                // تحديث العنوان والتاريخ
+                const now = new Date();
+                const arabicDate = now.toLocaleDateString('ar-SA');
+                const englishDate = now.toLocaleDateString('en-US');
+                pdfDate.innerHTML = `تاريخ التقرير: ${arabicDate} - ${englishDate} - الوقت: ${now.toLocaleTimeString('ar-SA')}`;
+                
+                // تحديث المحتوى
+                const tbody = pdfContent.querySelector('tbody');
+                tbody.innerHTML = '';
+                
+                // ترتيب الأرشيف من الأحدث إلى الأقدم
+                const sortedArchive = archive.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                sortedArchive.forEach(booking => {
+                    const row = tbody.insertRow();
+                    const bookingTime = new Date(booking.timestamp);
+                    const arabicDate = bookingTime.toLocaleDateString('ar-SA');
+                    const englishDate = bookingTime.toLocaleDateString('en-US');
+                    
+                    row.insertCell(0).innerText = booking.session;
+                    row.insertCell(1).innerText = booking.teacherName;
+                    row.insertCell(2).innerText = booking.room;
+                    row.insertCell(3).innerText = bookingTime.toLocaleTimeString('ar-SA');
+                    row.insertCell(4).innerText = `${arabicDate}\n${englishDate}`;
+                });
+                
+                // تحديث الملخص
+                pdfSummary.innerHTML = `إجمالي عدد الحجوزات في الأرشيف: ${archive.length}`;
+                
+                // إظهار الجدول مؤقتاً
+                pdfTable.style.display = 'block';
+                
+                // تحويل إلى صورة باستخدام html2canvas
+                const canvas = await html2canvas(pdfTable, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false
+                });
+                
+                // إخفاء الجدول مرة أخرى
+                pdfTable.style.display = 'none';
+                
+                // إنشاء PDF
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const imgData = canvas.toDataURL('image/png');
+                const imgWidth = 190;
+                const pageHeight = 280;
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 10;
+                
+                doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+                
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight + 10;
+                    doc.addPage();
+                    doc.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                
+                const fileName = `أرشيف_حجوزات_الغرف_${now.toISOString().split('T')[0]}.pdf`;
+                doc.save(fileName);
+                
+            } catch (error) {
+                console.error('Error exporting archive PDF:', error);
+                alert("حدث خطأ في تصدير الأرشيف كـ PDF");
+            }
+        }
+
+        // الأرشيف - تصدير الأرشيف كـ Excel
+        async function exportArchiveExcel() {
+            try {
+                const response = await fetch(JSONBIN_URL, {
+                    headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                });
+                
+                const data = await response.json();
+                const archive = data.record?.archive || [];
+                
+                if (archive.length === 0) {
+                    alert("لا توجد بيانات في الأرشيف لتصديرها");
+                    return;
+                }
+
+                // ترتيب الأرشيف من الأحدث إلى الأقدم
+                const sortedArchive = archive.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                // إنشاء محتوى CSV
+                let csvContent = "الحصة,اسم المعلم,الغرفة,وقت الحجز,التاريخ الهجري,التاريخ الميلادي\n";
+                
+                sortedArchive.forEach(booking => {
+                    const bookingTime = new Date(booking.timestamp);
+                    const arabicDate = bookingTime.toLocaleDateString('ar-SA');
+                    const englishDate = bookingTime.toLocaleDateString('en-US');
+                    const time = bookingTime.toLocaleTimeString('ar-SA');
+                    
+                    csvContent += `"${booking.session}","${booking.teacherName}","${booking.room}","${time}","${arabicDate}","${englishDate}"\n`;
+                });
+                
+                // إنشاء ملف وتنزيله
+                const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                
+                link.setAttribute("href", url);
+                link.setAttribute("download", `أرشيف_حجوزات_الغرف_${new Date().toISOString().split('T')[0]}.csv`);
+                link.style.visibility = 'hidden';
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+            } catch (error) {
+                console.error('Error exporting archive Excel:', error);
+                alert("حدث خطأ في تصدير الأرشيف كـ Excel");
+            }
+        }
+
         // الأرشيف - مسح الأرشيف
         async function clearArchive() {
             if (confirm("هل أنت متأكد من رغبتك في مسح كل الأرشيف؟ لا يمكن التراجع عن هذا الإجراء.")) {
@@ -702,7 +858,7 @@
             }
         }
 
-        // حفظ كـ PDF باستخدام html2canvas
+        // حفظ كـ PDF للحجوزات النشطة
         async function saveAsPDF() {
             try {
                 // إعداد جدول PDF
@@ -800,7 +956,6 @@
         // تحميل البيانات عند فتح الصفحة
         document.addEventListener('DOMContentLoaded', function() {
             updateReservationTable();
-            console.log('تم تحميل نظام الحجوزات مع الأرشيف والتواريخ المزدوجة');
         });
     </script>
 </body>
